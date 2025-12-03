@@ -24,6 +24,17 @@ BS_dep_obs_dict = {
     'scheme': 'euler', 'return_vol': False,
 }
 
+BS_jump_diffusion_dict = {
+    'model_name': "BlackScholesJumpDiffusion",
+    'drift': 2., 'volatility': 0.3,
+    'jump_intensity': 0.5, 'jump_mean': -0.2, 'jump_std': 0.25,
+    'compensate_jumps': True,
+    'nb_paths': 20000, 'nb_steps': 100,
+    'S0': 1, 'maturity': 1., 'dimension': 1,
+    'obs_perc': 0.1,
+    'scheme': 'euler', 'return_vol': False,
+}
+
 BM_NoisyObs_dict = {
     'model_name': "BMNoisyObs",
     'nb_paths': 20000, 'nb_steps': 100,

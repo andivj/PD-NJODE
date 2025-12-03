@@ -142,8 +142,9 @@ def train(
     :param weight: see models.NJODE
     :param weight_decay: see models.NJODE
     :param dataset: str, which dataset to use, supported: {'BlackScholes',
-            'Heston', 'OrnsteinUhlenbeck'}. The corresponding dataset already
-            needs to exist (create it first using data_utils.create_dataset)
+            'BlackScholesJumpDiffusion', 'Heston', 'OrnsteinUhlenbeck'}.
+            The corresponding dataset already needs to exist (create it first
+            using data_utils.create_dataset)
     :param dataset_id: int or None, the id of the dataset to be used, if None,
             the latest generated dataset of the given name will be used
     :param data_dict: None, str or dict, if not None, the inputs dataset and
