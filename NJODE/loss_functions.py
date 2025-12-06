@@ -253,6 +253,61 @@ def compute_loss_noisy_obs(
     return outer / batch_size
 
 
+def compute_loss_noisy_obs_weighted(
+        X_obs, Y_obs, Y_obs_bj, n_obs_ot, batch_size, eps=1e-10,
+        weight=0.5, M_obs=None,
+        compute_variance=None, var_weight=1.,
+        Y_var_bj=None, Y_var=None, dim_to=None, which_var_loss=None,
+        obs_noise_var=None, obs_var=None, obs_weight=None, **kwargs):
+    """
+    Like compute_loss_noisy_obs but multiplies the squared error by
+    inverse variance weights if provided (obs_noise_var or obs_var).
+    Additionally, if obs_weight is provided, it multiplies the squared errors
+    elementwise. If no variance/weight is provided, falls back to the unweighted
+    noisy_obs loss.
+    """
+    if M_obs is None:
+        M_obs = 1.
+
+    # pick variance source
+    var = obs_noise_var if obs_noise_var is not None else obs_var
+    # pick general weights (defaults to 1)
+    if obs_weight is not None:
+        obs_weight = obs_weight.to(X_obs.device)
+        if obs_weight.dim() == 1:
+            obs_weight = obs_weight.unsqueeze(1)
+        elif obs_weight.dim() > 2:
+            obs_weight = obs_weight.view(obs_weight.shape[0], -1)
+    else:
+        obs_weight = 1.0
+
+    if var is not None:
+        # ensure positive and avoid division by zero
+        weights = torch.rsqrt(torch.clamp(var, min=eps))
+        weighted_X_obs = X_obs * weights
+        weighted_Y_bj = Y_obs_bj * weights
+        inner = torch.sum(
+            M_obs * obs_weight * (weighted_Y_bj - weighted_X_obs) ** 2, dim=1)
+    else:
+        inner = torch.sum(
+            M_obs * obs_weight * (Y_obs_bj - X_obs) ** 2, dim=1)
+
+    outer = torch.sum(inner / n_obs_ot)
+
+    # compute the variance loss term if wanted
+    if compute_variance is not None:
+        var_loss_type = 3
+        if which_var_loss is not None:
+            var_loss_type = which_var_loss
+        outer += compute_var_loss(
+            X_obs, Y_obs, Y_obs_bj, n_obs_ot, batch_size, eps=1e-10,
+            weight=weight, M_obs=M_obs,
+            compute_variance=compute_variance, var_weight=var_weight,
+            Y_var_bj=Y_var_bj, Y_var=Y_var, dim_to=dim_to, type=var_loss_type)
+
+    return outer / batch_size
+
+
 def compute_loss_3(
         X_obs, Y_obs, Y_obs_bj, n_obs_ot, batch_size, eps=1e-10,
         weight=0.5, M_obs=None,
@@ -663,6 +718,7 @@ LOSS_FUN_DICT = {
     'very_easy': compute_loss_2_1,
     'IO': compute_loss_2_1,
     'noisy_obs': compute_loss_noisy_obs,
+    'noisy_obs_weighted': compute_loss_noisy_obs_weighted,
     'abs': compute_loss_3,
     'jump': compute_jump_loss,
     'vola': compute_loss_vola,

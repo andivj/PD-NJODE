@@ -35,7 +35,13 @@ def get_parameter_array(param_dict):
     :param param_dict: dict with parameters
     :return: 2d-array with the parameter combinations
     """
-    param_combs_dict_list = list(ParameterGrid(param_dict))
+    # Filter out empty parameter lists to avoid ParameterGrid errors
+    filtered_param_dict = {k: v for k, v in param_dict.items() if v}
+    
+    if not filtered_param_dict:
+        return []
+    
+    param_combs_dict_list = list(ParameterGrid(filtered_param_dict))
     return param_combs_dict_list
 
 

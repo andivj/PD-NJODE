@@ -846,7 +846,8 @@ def _get_X_with_func_appl(X, functions, axis):
     return Y
 
 
-def CustomCollateFnGen(func_names=None):
+def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
+                       obs_noise_meta=None, maturity=None, dt=None):
     """
     a function to get the costume collate function that can be used in
     torch.DataLoader with the wanted functions applied to the data as new
@@ -855,6 +856,12 @@ def CustomCollateFnGen(func_names=None):
     data doesn't have to be saved
 
     :param func_names: list of str, with all function names, see _get_func
+    :param weight_by_time_var: bool, if True and obs_noise_meta has scale_type
+            'time', use inverse variance weights per observation time
+    :param obs_noise_meta: dict or None, the obs_noise hyperparams used to
+            generate the dataset
+    :param maturity: float or None, maturity T of the process (used for time grid)
+    :param dt: float or None, timestep size
     :return: collate function, int (multiplication factor of dimension before
                 and after applying the functions)
     """
@@ -883,6 +890,20 @@ def CustomCollateFnGen(func_names=None):
             observed_dates = observed_dates.max(axis=1)
         nb_obs = torch.tensor(
             np.concatenate([b['nb_obs'] for b in batch], axis=0))
+
+        # prepare time-dependent variance weights if requested
+        obs_weight = []
+        var_grid = None
+        if (weight_by_time_var and obs_noise_meta is not None and
+                obs_noise_meta.get("scale_type") == "time"):
+            base_scale = obs_noise_meta.get("scale", 1.0)
+            gamma = obs_noise_meta.get("gamma", 1.0)
+            time_steps = observed_dates.shape[-1]
+            _dt = dt if dt is not None else 1.0 / max(1, time_steps - 1)
+            _T = maturity if maturity is not None else _dt * (time_steps - 1)
+            t_grid = np.linspace(0.0, _T, time_steps)
+            scale = base_scale * (1.0 + gamma * t_grid / _T)
+            var_grid = (scale ** 2)
 
         # here axis=1, since we have elements of dim
         #    [batch_size, data_dimension] => add as new data_dimensions
@@ -921,18 +942,25 @@ def CustomCollateFnGen(func_names=None):
                         X.append(_get_X_with_func_appl(sp, functions, axis=0))
                         if masked:
                             M.append(np.tile(mask[i, :, t], reps=mult))
+                        if var_grid is not None:
+                            obs_weight.append(1.0 / var_grid[t])
                         obs_idx.append(i)
                 time_ptr.append(counter)
 
         assert len(obs_idx) == observed_dates[:, 1:].sum()
         if masked:
             M = torch.tensor(np.array(M), dtype=torch.float32)
+        obs_weight_tensor = None
+        if len(obs_weight) > 0:
+            obs_weight_tensor = torch.tensor(
+                np.array(obs_weight), dtype=torch.float32).view(-1)
         res = {'times': np.array(times), 'time_ptr': np.array(time_ptr),
                'obs_idx': torch.tensor(obs_idx, dtype=torch.long),
                'start_X': start_X, 'n_obs_ot': nb_obs,
                'X': torch.tensor(np.array(X), dtype=torch.float32),
                'true_paths': stock_paths, 'observed_dates': observed_dates,
                'true_mask': mask, 'obs_noise': obs_noise,
+               'obs_weight': obs_weight_tensor,
                'M': M, 'start_M': start_M}
         return res
 

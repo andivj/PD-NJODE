@@ -674,7 +674,7 @@ class NJODE(torch.nn.Module):
 
     def forward(self, times, time_ptr, X, obs_idx, delta_t, T, start_X,
                 n_obs_ot, return_path=False, get_loss=True, until_T=False,
-                M=None, start_M=None, which_loss=None, dim_to=None,
+                M=None, start_M=None, obs_weight=None, which_loss=None, dim_to=None,
                 predict_labels=None, return_classifier_out=False,
                 return_at_last_obs=False, compute_variance_loss=True):
         """
@@ -704,6 +704,8 @@ class NJODE(torch.nn.Module):
                 size as X, with 0 or 1 entries
         :param start_M: None or torch.tensor, if not None: the mask for start_X,
                 same size as start_X
+        :param obs_weight: None or torch.tensor, optional per-observation
+                weighting to multiply squared errors in the loss
         :param which_loss: see train.train, to overwrite which loss for eval
         :param dim_to: None or int, if given not all coordinates along the
                 data-dimension axis are used but only up to dim_to. this can be
@@ -854,6 +856,11 @@ class NJODE(torch.nn.Module):
                 M_obs_in = None
                 M_obs_out = None
                 M_obs_sig = None
+            obs_weight_slice = None
+            if obs_weight is not None:
+                obs_weight_slice = obs_weight[start:end]
+                if obs_weight_slice.device != self.device:
+                    obs_weight_slice = obs_weight_slice.to(self.device)
 
             # decide whether to use observation as input
             if self.training:  # check whether model is in training or eval mode
@@ -939,6 +946,7 @@ class NJODE(torch.nn.Module):
                     var_weight=self.var_weight,
                     Y_var_bj=Y_var_bj, Y_var=Y_var, dim_to=dim_to,
                     which_var_loss=self.which_var_loss,
+                    obs_weight=obs_weight_slice,
                     tdiff=obs_time-last_obs_time[i_obs.long()],)
 
             # make update of last_X and tau, that is not inplace 
@@ -1532,7 +1540,8 @@ class NJODE(torch.nn.Module):
             return eval_metric, f1_scores
 
     def get_pred(self, times, time_ptr, X, obs_idx, delta_t, T, start_X,
-                 n_obs_ot, M=None, start_M=None, which_loss=None):
+                 n_obs_ot, M=None, start_M=None, which_loss=None,
+                 obs_weight=None):
         """
         get predicted path
         :param times: see forward
@@ -1551,7 +1560,7 @@ class NJODE(torch.nn.Module):
             times=times, time_ptr=time_ptr, X=X, obs_idx=obs_idx,
             delta_t=delta_t, T=T, start_X=start_X, n_obs_ot=n_obs_ot,
             return_path=True, get_loss=True, until_T=True, M=M,
-            start_M=start_M, which_loss=which_loss)
+            start_M=start_M, obs_weight=obs_weight, which_loss=which_loss)
         return {'pred': path_y, 'pred_t': path_t, 'loss': loss,
                 'pred_var': path_var}
 
@@ -2540,5 +2549,3 @@ class NJmodel(NJODE):
             t=torch.cat((tau, current_time - tau), dim=1))
 
         return next_h, current_time
-
-

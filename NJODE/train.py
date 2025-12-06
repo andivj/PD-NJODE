@@ -470,11 +470,17 @@ def train(
         data_test = data_utils.IrregularDataset(
             model_name=test_ds, time_id=test_ds_id, idx=None)
 
+    weight_by_time_var = options.get("weight_by_time_var", False)
+    obs_noise_meta = dataset_metadata.get("obs_noise")
+    maturity = dataset_metadata.get("maturity", None)
+
     # get functions to apply to the paths in X
     if 'func_appl_X' in options:  # list of functions to apply to the paths in X
         initial_print += '\napply functions to X'
         functions = options['func_appl_X']
-        collate_fn, mult = data_utils.CustomCollateFnGen(functions)
+        collate_fn, mult = data_utils.CustomCollateFnGen(
+            functions, weight_by_time_var=weight_by_time_var,
+            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t)
         input_size = input_size * mult
         output_size = output_size * mult
         input_coords = np.concatenate(
@@ -485,7 +491,9 @@ def train(
         initial_print += '\nnew output_coords: {}'.format(output_coords)
     else:
         functions = None
-        collate_fn, mult = data_utils.CustomCollateFnGen(None)
+        collate_fn, mult = data_utils.CustomCollateFnGen(
+            None, weight_by_time_var=weight_by_time_var,
+            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t)
         mult = 1
 
     # get variance or covariance coordinates if wanted
@@ -930,12 +938,16 @@ def train(
             start_X = b["start_X"].to(device)
             obs_idx = b["obs_idx"]
             n_obs_ot = b["n_obs_ot"].to(device)
+            obs_weight = b.get("obs_weight", None)
+            if obs_weight is not None:
+                obs_weight = obs_weight.to(device)
 
             if 'other_model' not in options or model_name == "NJmodel":
                 hT, loss = model(
                     times=times, time_ptr=time_ptr, X=X, obs_idx=obs_idx,
                     delta_t=delta_t, T=T, start_X=start_X, n_obs_ot=n_obs_ot,
-                    return_path=False, get_loss=True, M=M, start_M=start_M,)
+                    return_path=False, get_loss=True, M=M, start_M=start_M,
+                    obs_weight=obs_weight,)
             elif options['other_model'] == "randomizedNJODE":
                 linreg_X_, linreg_y_ = model.get_Xy_reg(
                     times=times, time_ptr=time_ptr, X=X, obs_idx=obs_idx,
@@ -997,13 +1009,17 @@ def train(
                 n_obs_ot = b["n_obs_ot"].to(device)
                 true_paths = b["true_paths"]
                 true_mask = b["true_mask"]
+                obs_weight = b.get("obs_weight", None)
+                if obs_weight is not None:
+                    obs_weight = obs_weight.to(device)
 
                 if 'other_model' not in options or \
                         model_name in ("randomizedNJODE", "NJmodel"):
                     hT, c_loss = model(
                         times, time_ptr, X, obs_idx, delta_t, T, start_X,
                         n_obs_ot, return_path=False, get_loss=True, M=M,
-                        start_M=start_M, which_loss=which_val_loss,)
+                        start_M=start_M, which_loss=which_val_loss,
+                        obs_weight=obs_weight,)
                 elif options['other_model'] == "GRU_ODE_Bayes":
                     if M is None:
                         M = torch.ones_like(X)
@@ -1027,6 +1043,7 @@ def train(
                             n_obs_ot, return_path=False, get_loss=True, M=M,
                             start_M=start_M, which_loss=which_val_loss,
                             dim_to=original_output_dim,
+                            obs_weight=obs_weight,
                             compute_variance_loss=False,)
                     loss_val_corrected += c_loss_corrected.detach().cpu().numpy()
 
@@ -1472,13 +1489,16 @@ def plot_one_path_with_pred(
         obs_noise = batch["obs_noise"]
     else:
         obs_noise = None
+    obs_weight = batch.get("obs_weight", None)
+    if obs_weight is not None:
+        obs_weight = obs_weight.to(device)
     path_t_true_X = np.linspace(0., T, int(np.round(T / delta_t)) + 1)
 
     model.eval()  # put model in evaluation mode
     res = model.get_pred(
         times=times, time_ptr=time_ptr, X=X, obs_idx=obs_idx, delta_t=delta_t,
         T=T, start_X=start_X, M=M, start_M=start_M, n_obs_ot=n_obs_ot,
-        which_loss=which_loss)
+        which_loss=which_loss, obs_weight=obs_weight)
     path_y_pred = res['pred'].detach().cpu().numpy()
     if square_model_output:
         path_y_pred = path_y_pred ** 2
@@ -1777,5 +1797,3 @@ def plot_one_path_with_pred(
         plt.close()
 
     return opt_loss, current_model_loss, err_dist_paths
-
-

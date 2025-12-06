@@ -3659,6 +3659,10 @@ class BMNoisyObs(BM):
         self.path_t = None
         self.loss = None
         self.noise_sig = obs_noise["scale"]
+        # BM with noisy observations does not provide conditional variance
+        # outputs, so disable the variance flag from the base BM class to avoid
+        # consumers expecting a 4-tuple return (loss, t, y, var).
+        self.return_var_implemented = False
 
     def compute_cond_exp(self, times, time_ptr, X, obs_idx, delta_t, T, start_X,
                          n_obs_ot, return_path=True, get_loss=False,
@@ -4738,5 +4742,4 @@ if __name__ == '__main__':
                   step_size=0.025, interval=100)
 
     pass
-
 

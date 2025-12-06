@@ -33,6 +33,25 @@ BM_NoisyObs_dict = {
                   'noise_at_start': False},
 }
 
+# --- Black–Scholes with time-heteroskedastic noisy observations
+BS_dep_obs_hetero_time_dict = {
+    'model_name': "BlackScholes",
+    'drift': 2., 'volatility': 0.3,
+    'nb_paths': 20000, 'nb_steps': 100,
+    'S0': 1., 'maturity': 1., 'dimension': 1,
+    'obs_perc': None,
+    'obs_scheme': {'name': "NJODE3-Example4.9", "p": 0.1, "eta": 3},
+    'scheme': 'euler', 'return_vol': False,
+    'obs_noise': {
+        'distribution': 'normal',
+        'loc': 0.0,
+        'scale': 0.3,
+        'scale_type': 'time',
+        'gamma': 1.0,
+        'noise_at_start': False,
+    },
+}
+
 # ==============================================================================
 # TRAINING PARAM DICTS
 # ------------------------------------------------------------------------------
@@ -148,6 +167,80 @@ plot_paths_BM_NoisyObs_dict = {
     'which': 'best', 'paths_to_plot': [0,1,2,3,4,5],
     'save_extras': {'bbox_inches': 'tight', 'pad_inches': 0.01},}
 
+
+# ------------------------------------------------------------------------------
+# --- Black–Scholes with time-heteroskedastic noisy observations (weighted)
+BS_dep_obs_hetero_time_models_path = (
+    f"{data_path}saved_models_BS_dep_obs_hetero_time_weighted/"
+)
+param_list_BS_dep_obs_hetero_time = []
+
+for size in [100]:
+    for act in ['tanh', 'relu']:
+        _nn = ((size, act),)
+        param_dict_BS_dep_obs_hetero_time = {
+            'epochs': [200],
+            'batch_size': [200],
+            'save_every': [1],
+            'learning_rate': [0.001],
+            'test_size': [0.2],
+            'seed': [398],
+            'hidden_size': [size],
+            'bias': [True],
+            'dropout_rate': [0.1],
+            'ode_nn': [_nn],
+            'readout_nn': [_nn, None],
+            'enc_nn': [_nn],
+            'use_rnn': [True],
+            'residual_dec': [True, False],
+            'func_appl_X': [[]],
+            'solver': ["euler"],
+            'weight': [0.5],
+            'weight_decay': [1.],
+            'input_sig': [True],
+            'level': [3],
+            'data_dict': ["BS_dep_obs_hetero_time_dict"],
+            'dataset_id': [None],
+            'which_loss': ['noisy_obs_weighted'],
+            'coord_wise_tau': [False],
+            'use_y_for_ode': [True],
+            'masked': [False],
+            'plot': [True],
+            'evaluate': [True],
+            'paths_to_plot': [(0,1,2,3,4,)],
+            'plot_same_yaxis': [True],
+            'plot_obs_prob': [True],
+            'weight_by_time_var': [True],
+            'saved_models_path': [BS_dep_obs_hetero_time_models_path],
+        }
+        param_list_BS_dep_obs_hetero_time += get_parameter_array(
+            param_dict=param_dict_BS_dep_obs_hetero_time
+        )
+
+overview_dict_BS_dep_obs_hetero_time = dict(
+    ids_from=1, ids_to=len(param_list_BS_dep_obs_hetero_time),
+    path=BS_dep_obs_hetero_time_models_path,
+    params_extract_desc=('data_dict', 'network_size', 'readout_nn',
+                         'activation_function_1',
+                         'hidden_size', 'batch_size', 'which_loss',
+                         'input_sig', 'level', 'coord_wise_tau',
+                         'use_y_for_ode', 'residual_dec'),
+    val_test_params_extract=(
+        ("max", "epoch", "epoch", "epochs_trained"),
+        ("min", "evaluation_mean_diff",
+         "evaluation_mean_diff", "evaluation_mean_diff_min"),
+        ("min", "val_loss", "val_loss", "val_loss_min"),
+    ),
+    sortby=["evaluation_mean_diff_min"],
+)
+
+plot_paths_BS_dep_obs_hetero_time_dict = {
+    'model_ids': [1, 2], 'saved_models_path': BS_dep_obs_hetero_time_models_path,
+    'which': 'best',
+    'paths_to_plot': [0,1,2,3,4,5],
+    'save_extras': {'bbox_inches': 'tight', 'pad_inches': 0.01},
+    'plot_obs_prob': True,
+}
 
 
 # ------------------------------------------------------------------------------
@@ -299,3 +392,121 @@ crossval_dict_climate_N3 = dict(
 
 if __name__ == '__main__':
     pass
+# weighted vs unweighted comparison for time-heteroskedastic noise
+BS_dep_obs_hetero_time_models_path = (
+    f"{data_path}saved_models_BS_dep_obs_hetero_time/"
+)
+BS_dep_obs_hetero_time_models_path_weighted = (
+    f"{data_path}saved_models_BS_dep_obs_hetero_time_weighted/"
+)
+param_list_BS_dep_obs_hetero_time = []
+param_list_BS_dep_obs_hetero_time_weighted = []
+
+for size in [100]:
+    for act in ['tanh', 'relu']:
+        _nn = ((size, act),)
+        # unweighted baseline
+        param_dict_BS_dep_obs_hetero_time = {
+            'epochs': [200],
+            'batch_size': [200],
+            'save_every': [1],
+            'learning_rate': [0.001],
+            'test_size': [0.2],
+            'seed': [398],
+            'hidden_size': [size],
+            'bias': [True],
+            'dropout_rate': [0.1],
+            'ode_nn': [_nn],
+            'readout_nn': [_nn, None],
+            'enc_nn': [_nn],
+            'use_rnn': [True],
+            'residual_dec': [True, False],
+            'func_appl_X': [[]],
+            'solver': ["euler"],
+            'weight': [0.5],
+            'weight_decay': [1.],
+            'input_sig': [True],
+            'level': [3],
+            'data_dict': ["BS_dep_obs_hetero_time_dict"],
+            'dataset_id': [None],
+            'which_loss': ['noisy_obs'],
+            'coord_wise_tau': [False],
+            'use_y_for_ode': [True],
+            'masked': [False],
+            'plot': [True],
+            'evaluate': [True],
+            'paths_to_plot': [(0,1,2,3,4,)],
+            'plot_same_yaxis': [True],
+            'plot_obs_prob': [True],
+            'weight_by_time_var': [False],
+            'saved_models_path': [BS_dep_obs_hetero_time_models_path],
+        }
+        param_list_BS_dep_obs_hetero_time += get_parameter_array(
+            param_dict=param_dict_BS_dep_obs_hetero_time
+        )
+
+        # weighted loss (time-dependent variance weights)
+        param_dict_BS_dep_obs_hetero_time_w = {
+            **param_dict_BS_dep_obs_hetero_time,
+            'which_loss': ['noisy_obs_weighted'],
+            'weight_by_time_var': [True],
+            'saved_models_path': [BS_dep_obs_hetero_time_models_path_weighted],
+        }
+        param_list_BS_dep_obs_hetero_time_weighted += get_parameter_array(
+            param_dict=param_dict_BS_dep_obs_hetero_time_w
+        )
+
+overview_dict_BS_dep_obs_hetero_time = dict(
+    ids_from=1, ids_to=len(param_list_BS_dep_obs_hetero_time),
+    path=BS_dep_obs_hetero_time_models_path,
+    params_extract_desc=('data_dict', 'network_size', 'readout_nn',
+                         'activation_function_1',
+                         'hidden_size', 'batch_size', 'which_loss',
+                         'input_sig', 'level', 'coord_wise_tau',
+                         'use_y_for_ode', 'residual_dec'),
+    val_test_params_extract=(
+        ("max", "epoch", "epoch", "epochs_trained"),
+        ("min", "evaluation_mean_diff",
+         "evaluation_mean_diff", "evaluation_mean_diff_min"),
+        ("min", "val_loss", "val_loss", "val_loss_min"),
+    ),
+    sortby=["evaluation_mean_diff_min"],
+)
+
+overview_dict_BS_dep_obs_hetero_time_weighted = dict(
+    ids_from=1, ids_to=len(param_list_BS_dep_obs_hetero_time_weighted),
+    path=BS_dep_obs_hetero_time_models_path_weighted,
+    params_extract_desc=overview_dict_BS_dep_obs_hetero_time["params_extract_desc"],
+    val_test_params_extract=overview_dict_BS_dep_obs_hetero_time["val_test_params_extract"],
+    sortby=["evaluation_mean_diff_min"],
+)
+
+plot_paths_BS_dep_obs_hetero_time_dict = {
+    'model_ids': [1, 2], 'saved_models_path': BS_dep_obs_hetero_time_models_path,
+    'which': 'best',
+    'paths_to_plot': [0,1,2,3,4,5],
+    'save_extras': {'bbox_inches': 'tight', 'pad_inches': 0.01},
+    'plot_obs_prob': True,
+}
+
+plot_paths_BS_dep_obs_hetero_time_weighted_dict = {
+    'model_ids': [1, 2],
+    'saved_models_path': BS_dep_obs_hetero_time_models_path_weighted,
+    'which': 'best',
+    'paths_to_plot': [0,1,2,3,4,5],
+    'save_extras': {'bbox_inches': 'tight', 'pad_inches': 0.01},
+    'plot_obs_prob': True,
+}
+
+plot_loss_comparison_BS_dep_obs_hetero_time = dict(
+    filename="{}training_overview-ids-{}-{}.csv".format(
+                BS_dep_obs_hetero_time_models_path, 1,
+                len(param_list_BS_dep_obs_hetero_time)),
+    param_combinations=({'which_loss': 'noisy_obs'},
+                        {'which_loss': 'noisy_obs_weighted'}),
+    labels=('unweighted', 'variance-weighted'),
+    outfile="{}loss_comparison_time_hetero.pdf".format(
+        BS_dep_obs_hetero_time_models_path_weighted),
+    xcol='activation_function_1', ycol='evaluation_mean_diff_min',
+    xlabel="activation", ylabel="Evaluation mean diff",
+    logx=False, logy=False,)
