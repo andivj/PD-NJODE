@@ -234,6 +234,24 @@ def create_dataset(
                 pass
             else:
                 obs_noise[:,:,0] = 0
+        elif obs_noise_dict["distribution"] == "student_t":
+            df = obs_noise_dict.get("df", 3)
+            scale = obs_noise_dict.get("scale", 1.0)
+            loc = obs_noise_dict.get("loc", 0.0)
+            obs_noise = loc + scale * np.random.standard_t(df=df, size=size)
+            if not obs_noise_dict.get('noise_at_start', False):
+                obs_noise[:, :, 0] = 0
+        elif obs_noise_dict["distribution"] == "skew_normal":
+            alpha = obs_noise_dict.get("alpha", 0.0)  # skew parameter
+            scale = obs_noise_dict.get("scale", 1.0)
+            loc = obs_noise_dict.get("loc", 0.0)
+            # skewed but centered construction: N(0,1) + alpha*(|N(0,1)| - E|N|)
+            z = np.random.normal(size=size)
+            h = np.random.normal(size=size)
+            skew_component = alpha * (np.abs(h) - np.sqrt(2/np.pi))
+            obs_noise = loc + scale * (z + skew_component)
+            if not obs_noise_dict.get('noise_at_start', False):
+                obs_noise[:, :, 0] = 0
         else:
             raise ValueError("obs_noise distribution {} not implemented".format(
                 obs_noise_dict["distribution"]))
@@ -847,7 +865,10 @@ def _get_X_with_func_appl(X, functions, axis):
 
 
 def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
-                       obs_noise_meta=None, maturity=None, dt=None):
+                       weight_by_state_var=False,
+                       obs_noise_meta=None, maturity=None, dt=None,
+                       weight_exponent=1.0, weight_clip=None,
+                       weight_smooth_window=None):
     """
     a function to get the costume collate function that can be used in
     torch.DataLoader with the wanted functions applied to the data as new
@@ -858,10 +879,17 @@ def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
     :param func_names: list of str, with all function names, see _get_func
     :param weight_by_time_var: bool, if True and obs_noise_meta has scale_type
             'time', use inverse variance weights per observation time
+    :param weight_by_state_var: bool, if True and obs_noise_meta has scale_type
+            'state', use inverse variance weights based on |X_t|
     :param obs_noise_meta: dict or None, the obs_noise hyperparams used to
             generate the dataset
     :param maturity: float or None, maturity T of the process (used for time grid)
     :param dt: float or None, timestep size
+    :param weight_exponent: float, exponent applied to the inverse-variance
+            weights (e.g. 0.5 for sqrt, 1.0 for full 1/var)
+    :param weight_clip: None or tuple (min_w, max_w), clip weights into this range
+    :param weight_smooth_window: None or int, if int>1 smooth the variance grid
+            for time-dependent weights with a moving average of this window
     :return: collate function, int (multiplication factor of dimension before
                 and after applying the functions)
     """
@@ -894,6 +922,7 @@ def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
         # prepare time-dependent variance weights if requested
         obs_weight = []
         var_grid = None
+        var_grid_state = None
         if (weight_by_time_var and obs_noise_meta is not None and
                 obs_noise_meta.get("scale_type") == "time"):
             base_scale = obs_noise_meta.get("scale", 1.0)
@@ -904,6 +933,16 @@ def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
             t_grid = np.linspace(0.0, _T, time_steps)
             scale = base_scale * (1.0 + gamma * t_grid / _T)
             var_grid = (scale ** 2)
+            if weight_smooth_window is not None and weight_smooth_window > 1:
+                kernel = np.ones(int(weight_smooth_window), dtype=float)
+                kernel = kernel / kernel.sum()
+                var_grid = np.convolve(var_grid, kernel, mode="same")
+        if (weight_by_state_var and obs_noise_meta is not None and
+                obs_noise_meta.get("scale_type") == "state"):
+            base_scale = obs_noise_meta.get("scale", 1.0)
+            alpha = obs_noise_meta.get("alpha", 1.0)
+            scale_state = base_scale * (1.0 + alpha * np.abs(stock_paths))
+            var_grid_state = scale_state ** 2
 
         # here axis=1, since we have elements of dim
         #    [batch_size, data_dimension] => add as new data_dimensions
@@ -943,7 +982,15 @@ def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
                         if masked:
                             M.append(np.tile(mask[i, :, t], reps=mult))
                         if var_grid is not None:
-                            obs_weight.append(1.0 / var_grid[t])
+                            w = (1.0 / var_grid[t]) ** weight_exponent
+                            if weight_clip is not None:
+                                w = np.clip(w, weight_clip[0], weight_clip[1])
+                            obs_weight.append(w)
+                        elif var_grid_state is not None:
+                            w = (1.0 / var_grid_state[i, :, t]) ** weight_exponent
+                            if weight_clip is not None:
+                                w = np.clip(w, weight_clip[0], weight_clip[1])
+                            obs_weight.append(w)
                         obs_idx.append(i)
                 time_ptr.append(counter)
 
@@ -953,7 +1000,7 @@ def CustomCollateFnGen(func_names=None, weight_by_time_var=False,
         obs_weight_tensor = None
         if len(obs_weight) > 0:
             obs_weight_tensor = torch.tensor(
-                np.array(obs_weight), dtype=torch.float32).view(-1)
+                np.array(obs_weight), dtype=torch.float32)
         res = {'times': np.array(times), 'time_ptr': np.array(time_ptr),
                'obs_idx': torch.tensor(obs_idx, dtype=torch.long),
                'start_X': start_X, 'n_obs_ot': nb_obs,

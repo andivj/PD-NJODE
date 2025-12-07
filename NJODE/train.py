@@ -471,8 +471,12 @@ def train(
             model_name=test_ds, time_id=test_ds_id, idx=None)
 
     weight_by_time_var = options.get("weight_by_time_var", False)
+    weight_by_state_var = options.get("weight_by_state_var", False)
     obs_noise_meta = dataset_metadata.get("obs_noise")
     maturity = dataset_metadata.get("maturity", None)
+    weight_exponent = options.get("weight_exponent", 1.0)
+    weight_clip = options.get("weight_clip", None)
+    weight_smooth_window = options.get("weight_smooth_window", None)
 
     # get functions to apply to the paths in X
     if 'func_appl_X' in options:  # list of functions to apply to the paths in X
@@ -480,7 +484,10 @@ def train(
         functions = options['func_appl_X']
         collate_fn, mult = data_utils.CustomCollateFnGen(
             functions, weight_by_time_var=weight_by_time_var,
-            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t)
+            weight_by_state_var=weight_by_state_var,
+            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t,
+            weight_exponent=weight_exponent, weight_clip=weight_clip,
+            weight_smooth_window=weight_smooth_window)
         input_size = input_size * mult
         output_size = output_size * mult
         input_coords = np.concatenate(
@@ -493,7 +500,10 @@ def train(
         functions = None
         collate_fn, mult = data_utils.CustomCollateFnGen(
             None, weight_by_time_var=weight_by_time_var,
-            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t)
+            weight_by_state_var=weight_by_state_var,
+            obs_noise_meta=obs_noise_meta, maturity=maturity, dt=delta_t,
+            weight_exponent=weight_exponent, weight_clip=weight_clip,
+            weight_smooth_window=weight_smooth_window)
         mult = 1
 
     # get variance or covariance coordinates if wanted

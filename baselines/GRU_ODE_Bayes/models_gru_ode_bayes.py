@@ -543,9 +543,14 @@ class NNFOwithBayesianJumps(torch.nn.Module):
         """
         self.eval()
         M = torch.ones_like(X)
-        _, _, _, path_t, path_p, path_h, _, _ = self.forward(
+        result = self.forward(
             times, time_ptr, X, M, obs_idx, delta_t, T, start_X,
             return_path=True, smoother=False)
+        # Unpack result flexibly - could have 6 or 7 values depending on smoother flag
+        if len(result) >= 6:
+            _, _, _, path_t, path_p, path_h = result[0], result[1], result[2], result[3], result[4], result[5]
+        else:
+            raise ValueError(f"Expected at least 6 values from forward with return_path=True, got {len(result)}")
         m, v = torch.chunk(path_p, 2, dim=2)
         path_y = m
 
@@ -574,9 +579,14 @@ class NNFOwithBayesianJumps(torch.nn.Module):
         :return: dict, with prediction y and times t
         """
         M = torch.ones_like(X)
-        _, _, _, path_t, path_p, path_h, _, _ = self.forward(
+        result = self.forward(
             times, time_ptr, X, M, obs_idx, delta_t, T, start_X,
             return_path=True, smoother=False)
+        # Unpack result flexibly - could have 6 or 7 values depending on smoother flag
+        if len(result) >= 6:
+            _, _, _, path_t, path_p, path_h = result[0], result[1], result[2], result[3], result[4], result[5]
+        else:
+            raise ValueError(f"Expected at least 6 values from forward with return_path=True, got {len(result)}")
         m, v = torch.chunk(path_p, 2, dim=2)
         path_y = m
         return {'pred': path_y, 'pred_t': path_t}
