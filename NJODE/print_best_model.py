@@ -121,6 +121,8 @@ def run_examples(plot=False):
         "BS_dep_obs_heavy_noise": "../data/saved_models_BS_dep_obs_heavy_noise/",
         "BS_dep_obs_heavy_noise_robust": "../data/saved_models_BS_dep_obs_heavy_noise_robust/",
         "BS_dep_obs_heavy_noise_df2": "../data/saved_models_BS_dep_obs_heavy_noise_df2/",
+        "BS_dep_obs_heavy_noise_df3": "../data/saved_models_BS_dep_obs_heavy_noise_df3/",
+        "BS_dep_obs_heavy_noise_df5": "../data/saved_models_BS_dep_obs_heavy_noise_df5/",
         "BS_dep_obs_hetero_state": "../data/saved_models_BS_dep_obs_hetero_state/",
         "BS_dep_obs_hetero_state_weighted": "../data/saved_models_BS_dep_obs_hetero_state_weighted/",
         "BS_dep_obs_hetero_time": "../data/saved_models_BS_dep_obs_hetero_time/",
